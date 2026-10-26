@@ -100,9 +100,10 @@ inline constexpr std::uint8_t kRegShadowEnd   = 0x1F;
 inline constexpr std::size_t  kNumShadowRegs  = kRegShadowEnd - kRegShadowStart + 1; // 27
 
 // PLL constants (Table 1-3, R16/R20-R22, p. 9)
-inline constexpr std::uint32_t kVcoMin      = 1'770'000'000;
-inline constexpr std::uint32_t kPllCalFreq  = 56'000'000;
-inline constexpr std::uint8_t  kVcoPowerRef = 2; // R820T reference; R828D uses 1
+inline constexpr std::uint32_t kVcoMin           = 1'770'000'000;
+inline constexpr std::uint32_t kPllCalFreq       = 56'000'000;
+inline constexpr std::uint8_t  kVcoPowerRefR820t = 2; // nominal VCO_FINE_TUNE readback (R4[5:4]), R820T/R820T2/R860
+inline constexpr std::uint8_t  kVcoPowerRefR828d = 1; // nominal VCO_FINE_TUNE readback (R4[5:4]), R828D
 
 inline constexpr std::array kKnownRTL2832Ids{
     gr::blocks::common::USBDeviceId{0x0BDA, 0x2832, "RTL2832U"},
@@ -1147,10 +1148,13 @@ struct RTL2832Device {
         if (!regBuf) {
             return std::unexpected(regBuf.error());
         }
+        // the reference differs per tuner: comparing an R828D against the R820T value moves the
+        // divider one step too far, puts the VCO out of its range and the PLL does not lock
         int vcoFineTune = ((*regBuf)[4] & 0x30) >> 4;
-        if (vcoFineTune > kVcoPowerRef) {
+        int vcoPowerRef = _tunerType == TunerType::r828d ? kVcoPowerRefR828d : kVcoPowerRefR820t;
+        if (vcoFineTune > vcoPowerRef) {
             --divNum;
-        } else if (vcoFineTune < kVcoPowerRef) {
+        } else if (vcoFineTune < vcoPowerRef) {
             ++divNum;
         }
         divNum = std::clamp(divNum, 0, 6);
